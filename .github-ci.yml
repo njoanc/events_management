@@ -1,0 +1,93 @@
+Here's the equivalent GitHub Actions workflow based on your GitLab CI configuration:
+
+```yaml
+name: Node.js CI
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  npm:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Set npm registry
+        run: npm config set registry ${{ secrets.CI_NPM_REGISTRY }}
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          CI_NPM_REGISTRY: ${{ secrets.CI_NPM_REGISTRY }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v2
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+  build:
+    runs-on: ubuntu-latest
+    needs: npm
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Build
+        run: npm run build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: npm
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Test
+        run: npm test
+
+  deploy_to_stage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Deploy to staging
+        run: bash deploy/stage_deploy.sh
+      env:
+        STAGING_SERVER: ${{ secrets.STAGING_SERVER }}
+
+      - name: Environment variables
+        run: echo "STAGING_SERVER=${{ secrets.STAGING_SERVER }}" >> $GITHUB_ENV
+
+    if: github.ref == 'refs/heads/dev'
+
+  deploy_to_prod:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v2
+
+      - name: Deploy to production
+        run: bash deploy/prod_deploy.sh
+      env:
+        PRODUCTION_SERVER: ${{ secrets.PRODUCTION_SERVER }}
+
+      - name: Environment variables
+        run: echo "PRODUCTION_SERVER=${{ secrets.PRODUCTION_SERVER }}" >> $GITHUB_ENV
+
+    if: github.ref == 'refs/heads/main'
+```
+
+This GitHub Actions workflow is split into jobs that correspond to the stages in your GitLab CI file. It sets up Node.js, installs dependencies, runs tests, builds the project, and deploys to staging and production servers based on the branch. Note that you need to add your secrets (like `CI_NPM_REGISTRY`, `STAGING_SERVER`, and `PRODUCTION_SERVER`) to your GitHub repository's secrets settings.
